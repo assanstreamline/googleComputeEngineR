@@ -13,6 +13,7 @@ gce_vm_create(
   memory = NULL,
   image = "",
   disk_source = NULL,
+  attached_disk = NULL,
   network = gce_make_network("default", project = project),
   externalIP = NULL,
   canIpForward = NULL,
@@ -26,6 +27,7 @@ gce_vm_create(
   zone = gce_get_global_zone(),
   dry_run = FALSE,
   disk_size_gb = NULL,
+  disk_attached_size_gb = NULL,
   use_beta = FALSE,
   acceleratorCount = NULL,
   acceleratorType = "nvidia-tesla-p4"
@@ -47,6 +49,8 @@ gce_vm_create(
 \item{image}{Name of the image resource to return}
 
 \item{disk_source}{Specifies a valid URL to an existing Persistent Disk resource.}
+
+\item{attached_disk}{name of the attached disk (non bootable)}
 
 \item{network}{A network object created by \link{gce_make_network}}
 
@@ -73,6 +77,8 @@ gce_vm_create(
 \item{dry_run}{whether to just create the request JSON}
 
 \item{disk_size_gb}{If not NULL, override default size of the boot disk (size in GB)}
+
+\item{disk_attached_size_gb}{size in GB (minimum is 10 GB) of the attached disk}
 
 \item{use_beta}{If set to TRUE will use the beta version of the API. Should not be used for production purposes.}
 

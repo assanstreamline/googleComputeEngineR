@@ -23,8 +23,6 @@ gce_check_container <- function(...){
 #' 
 #' This lets you specify docker images when creating the VM.  These are a special class of Google instances that are setup for running Docker containers. 
 #' 
-#' @inheritParams Instance
-#' @inheritParams gce_make_machinetype_url
 #' @param file file location of a valid cloud-init or shell_script file. 
 #'   One of \code{file} or \code{cloud_init} or \code{shell_script} must be supplied
 #' @param cloud_init contents of a cloud-init file, for example read via \code{readChar(file, nchars = 32768)}

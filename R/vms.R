@@ -65,7 +65,7 @@ gce_vm <- function(name,
                    project = gce_get_global_project(), 
                    zone = gce_get_global_zone(),
                    open_webports = TRUE) {
-
+  
   if(is.gce_instance(name)){
     myMessage("Refreshing instance data", level = 3)
     name <- name$name
@@ -91,8 +91,8 @@ gce_vm <- function(name,
     suppressMessages(
       suppressWarnings(
         gce_get_instance(name, zone = zone, project = project)
-        )
       )
+    )
   }, error = function(ex) {
     dots <- list(...)
     if(!is.null(dots[["template"]])){
@@ -177,14 +177,14 @@ gce_vm_delete <- function(instances,
 
 
 gce_vm_delete_one <- function(instance,
-                          project, 
-                          zone) {
-
+                              project, 
+                              zone) {
+  
   assert_that(
     is.string(project),
     is.string(zone)
   )
-
+  
   url <- sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s", 
                  project, zone, instance)
   # compute.instances.delete
@@ -257,6 +257,10 @@ gce_vm_delete_one <- function(instance,
 #' @param use_beta If set to TRUE will use the beta version of the API. Should not be used for production purposes.
 #' @param acceleratorCount Number of GPUs to add to instance.  If using this, you may want to instead use \link{gce_vm_gpu} which sets some defaults for GPU instances.
 #' @param acceleratorType Name of GPU to add, see \link{gce_list_gpus}
+#' @param disk_attached_size_gb size in GB (minimum is 10 GB) of the attached disk
+#' @param attached_disk name of the attached disk (non bootable)
+#' 
+#' 
 #' 
 #' @return A zone operation, or if the name already exists the VM object from \link{gce_get_instance}
 #' 
@@ -272,6 +276,7 @@ gce_vm_create <- function(name,
                           memory = NULL,
                           image = "",
                           disk_source = NULL,
+                          attached_disk=NULL,
                           network = gce_make_network("default", project = project), 
                           externalIP = NULL,
                           canIpForward = NULL, 
@@ -285,6 +290,7 @@ gce_vm_create <- function(name,
                           zone = gce_get_global_zone(),
                           dry_run = FALSE,
                           disk_size_gb = NULL,
+                          disk_attached_size_gb=NULL,
                           use_beta = FALSE,
                           acceleratorCount = NULL,
                           acceleratorType = "nvidia-tesla-p4") {
@@ -314,33 +320,33 @@ gce_vm_create <- function(name,
       )
     )
   }
-
+  
   gcp_api_version = ifelse(use_beta, "beta", "v1")
   if(use_beta){
     warning("This is using the beta version of the Google Compute Engine API and may not work in the future.")
   }
   url <- sprintf("https://www.googleapis.com/compute/%s/projects/%s/zones/%s/instances", 
                  gcp_api_version, project, zone)
- 
+  
   
   if(is.null(predefined_type) && !assertthat::is.string(predefined_type)){
     if(any(is.null(cpus), is.null(memory))){
-     stop("Must supply one of 'predefined_type', or both 'cpus' and 'memory' arguments.") 
+      stop("Must supply one of 'predefined_type', or both 'cpus' and 'memory' arguments.") 
     }
   }
-
+  
   ## treat null image_project same as image_project = ""
   if(is.null(image_project)){
     image_project <- ""
   }
-
+  
   
   ## if an image project is defined, create a source_image_url
   if(nchar(image_project) > 0){
     if(!is.null(disk_source)){
       stop("Can specify only one of 'image_project' or 'disk_source' arguments.")
     }
-
+    
     if(nchar(image_family) > 0){
       
       ## creation from image_family
@@ -365,23 +371,60 @@ gce_vm_create <- function(name,
   
   ## make image initialisation
   initializeParams <- list(
-      sourceImage = source_image_url
-    )
+    sourceImage = source_image_url
+  )
   if (!is.null(disk_size_gb)) {
     initializeParams <- as.list(unlist(c(initializeParams, diskSizeGb = disk_size_gb)))
   }
-  init_disk <- list(
-    list(
-      initializeParams = initializeParams,
-      source = disk_source,
-      ## not in docs apart from https://cloud.google.com/compute/docs/instances/create-start-instance
-      autoDelete = unbox(TRUE),
-      boot       = unbox(TRUE),
-      type       = unbox("PERSISTENT"),
-      deviceName = unbox(paste0(name,"-boot-disk"))
+  
+  
+  # in case we want to attach an extra disk
+  if (!is.null(disk_attached_size_gb && !is.null(attached_disk))) {
+    initializeatAttachedDiskParams <- as.list(c(diskSizeGb = disk_size_gb))
+  }
+  
+  
+  # AS: not the best variable name
+  # there are the boot disks
+  # there are the additional disks
+  
+  if (is.null(attached_disk)){
+    
+    init_disk <- list(
+      list(
+        initializeParams = initializeParams,
+        source = disk_source,
+        ## not in docs apart from https://cloud.google.com/compute/docs/instances/create-start-instance
+        autoDelete = unbox(TRUE),
+        boot       = unbox(TRUE),
+        type       = unbox("PERSISTENT"),
+        deviceName = unbox(paste0(name,"-boot-disk"))
+      )
     )
-  )
-
+  } else {
+    
+    # in case there are boot disks + additional disk
+    init_disk <- list(
+      list(
+        initializeParams = initializeParams,
+        source = disk_source,
+        ## not in docs apart from https://cloud.google.com/compute/docs/instances/create-start-instance
+        autoDelete = unbox(TRUE),
+        boot       = unbox(TRUE),
+        type       = unbox("PERSISTENT"),
+        deviceName = unbox(paste0(name,"-boot-disk"))
+      ),
+      list(
+        initializeParams = initializeatAttachedDiskParams,
+        ## not in docs apart from https://cloud.google.com/compute/docs/instances/create-start-instance
+        autoDelete = unbox(TRUE),
+        boot       = unbox(FALSE),
+        type       = unbox("PERSISTENT"),
+        deviceName = unbox(paste0(name,"-disk2"))
+      )
+      
+    )
+  }
   ## make machine type
   machineType <- gce_make_machinetype_url(predefined_type = predefined_type,
                                           cpus = cpus,
@@ -397,9 +440,9 @@ gce_vm_create <- function(name,
   }
   
   if(!is.null(minCpuPlatform)){
-     assert_that(is.string(minCpuPlatform))
+    assert_that(is.string(minCpuPlatform))
   }
-
+  
   ## make instance object
   the_instance <- Instance(canIpForward = canIpForward, 
                            description = description, 
@@ -437,7 +480,7 @@ gce_vm_create <- function(name,
   }
   
   out
-
+  
 }
 
 
@@ -467,9 +510,9 @@ gce_vm_reset <- function(instances,
 
 
 gce_vm_reset_one <- function(instance,
-                         project, 
-                         zone) {
-
+                             project, 
+                             zone) {
+  
   url <- sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/reset", 
                  project, zone, as.gce_instance_name(instance))
   # compute.instances.reset
@@ -512,10 +555,10 @@ gce_vm_start <- function(instances,
 }
 
 gce_vm_start_one <- function(instance,
-                         project, 
-                         zone
-                         ) {
-
+                             project, 
+                             zone
+) {
+  
   url <- sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/start", 
                  project, zone, as.gce_instance_name(instance))
   # compute.instances.start
@@ -559,9 +602,9 @@ gce_vm_stop <- function(instances,
 
 
 gce_vm_stop_one <- function(instance,
-                        project, 
-                        zone) {
-
+                            project, 
+                            zone) {
+  
   url <- 
     sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/stop",
             project, zone, as.gce_instance_name(instance))
@@ -593,16 +636,16 @@ gce_vm_suspend_one <- function(instance,
 #' @export
 #' @rdname gce_vm_stop
 gce_vm_suspend <- function(instances,
-                        project = gce_get_global_project(), 
-                        zone = gce_get_global_zone()){
+                           project = gce_get_global_project(), 
+                           zone = gce_get_global_zone()){
   
   lapply(instances, gce_vm_suspend_one, project = project, zone = zone)
 }
 
 
 gce_vm_resume_one <- function(instance,
-                               project, 
-                               zone) {
+                              project, 
+                              zone) {
   
   url <- 
     sprintf("https://www.googleapis.com/compute/beta/projects/%s/zones/%s/instances/%s/resume",
@@ -619,8 +662,8 @@ gce_vm_resume_one <- function(instance,
 #' @export
 #' @rdname gce_vm_stop
 gce_vm_resume <- function(instances,
-                           project = gce_get_global_project(), 
-                           zone = gce_get_global_zone()){
+                          project = gce_get_global_project(), 
+                          zone = gce_get_global_zone()){
   
   lapply(instances, gce_vm_resume_one, project = project, zone = zone)
 }

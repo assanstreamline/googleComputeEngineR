@@ -30,6 +30,8 @@ gce_vm(
     \item{\code{use_beta}}{If set to TRUE will use the beta version of the API. Should not be used for production purposes.}
     \item{\code{acceleratorCount}}{Number of GPUs to add to instance.  If using this, you may want to instead use \link{gce_vm_gpu} which sets some defaults for GPU instances.}
     \item{\code{acceleratorType}}{Name of GPU to add, see \link{gce_list_gpus}}
+    \item{\code{disk_attached_size_gb}}{size in GB (minimum is 10 GB) of the attached disk}
+    \item{\code{attached_disk}}{name of the attached disk (non bootable)}
     \item{\code{canIpForward}}{Allows this instance to send and receive packets with non-matching destination or source IPs}
     \item{\code{description}}{An optional description of this resource}
     \item{\code{metadata}}{A named list of metadata key/value pairs assigned to this instance}
